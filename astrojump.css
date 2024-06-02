@@ -1,0 +1,33 @@
+body { 
+    text-align: center;   
+    align-items: center;
+    display: flex; 
+    justify-content:space-around; 
+    background-color: black;
+} 
+
+div{ 
+    width: 360px; 
+    height: 700px; 
+} 
+
+#board { 
+    background-color: green;  
+    background-repeat: no-repeat; 
+    background-size: 100% 100%;
+    background-image : url("materials/backgrounddarkstart.avif"); 
+    border-style: solid; 
+    border-color: aliceblue;
+}
+
+h1{ 
+    color: white;
+} 
+
+table{  
+    color: white;
+} 
+
+#imgsize{ 
+    width: 100px;
+} 

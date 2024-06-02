@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstroJump</title>
+    <link rel="stylesheet" href="astrojump.css">
+    <script src="meteor.js"></script>
+    <script src="platform.js"></script>
+    <script src="buff.js"></script>
+    <script src="blackhole.js"></script>
+    <script src="effects.js"></script>
+    <script src="comet.js"></script>
+</head>
+<body>
+    <audio hidden autoplay loop>
+        <source src="materials/musik.mp3" type="audio/mpeg">
+    </audio>
+
+    <div>
+        <h1>Cara Bermain:</h1>
+        <table>
+            <tr>
+                <td>
+                    1. Astronot akan melompat secara otomasi jika mengenai platform yang berbentuk batu
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    2. Untuk menggerakan astronot dapat menggunakan panah kanan dan panah kiri pada keyboard
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <img src="materials/arrowKeys.png">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    3. Skor akan bertambah jika kita menyentuh koordinat yang lebih tinggi yang belum pernah kita kenai sebelumnya (Skor tertampil di pojok kiri atas dari papan permainan)
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    4. Semakin tinggi skor akan semakin bertambah juga rintangan nya
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div>
+        <canvas id="board"></canvas>
+    </div>
+    <div>
+        <h1>Rintangan:</h1>
+        <table>
+            <tr>
+                <td>
+                    1. Rintangan Meteor
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <img id="imgsize" src="materials/Meteorit.png">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    2. Rintangan Blackhole
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <img id="imgsize" src="materials/blackhole.png">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    3. Rintangan Saturnus
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <img id="imgsize" src="materials/saturnus.png">
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    4. Kekuatan Bintang, kebal dengan metoer
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <img id="imgsize" src="materials/bintang.png">
+                </td>
+            </tr>
+        </table>
+    </div>
+    <script>
+        // board
+        let board;
+        let boardWidth = 360;
+        let boardHeight = 700;
+        let context;
+
+        let score = 0;
+        let maxScore = 0;
+        let gameOver = false;
+        let invincible = false;
+
+        // astronaut
+        let astronautWidth = 46;
+        let astronautHeight = 46;
+        let astronautX = boardWidth / 2 - astronautWidth / 2;
+        let astronautY = boardHeight * 7 / 8 - astronautHeight;
+        let astronautLeftImg;
+        let astronautRightImg;
+
+        // velocity
+        let velocityX = 0;
+        let velocityY = 0; // jump speed
+        let initialVelocityY = -2.5; // kecepatan lompat
+        let gravity = 0.025; // kecepatan jatuh dan gravitasi
+
+        let astronaut = {
+            img: null,
+            x: astronautX,
+            y: astronautY,
+            width: astronautWidth,
+            height: astronautHeight
+        };
+
+        let starArray = [];
+        let powerUpArray = [];
+        let blackHoleArray = [];
+        let orbitalStars = [];
+        let cometArray = [];
+
+        window.onload = function () {
+            board = document.getElementById("board");
+            board.height = boardHeight;
+            board.width = boardWidth;
+            context = board.getContext("2d");
+
+            astronautRightImg = new Image();
+            astronautRightImg.src = "materials/astro.png";
+            astronaut.img = astronautRightImg;
+            astronautRightImg.onload = function () {
+                context.drawImage(astronaut.img, astronaut.x, astronaut.y, astronaut.width, astronaut.height);
+            };
+
+            astronautLeftImg = new Image();
+            astronautLeftImg.src = "materials/astro.png";
+
+            velocityY = initialVelocityY;
+            placePlatform();
+            createStars();
+
+            requestAnimationFrame(update);
+            document.addEventListener("keydown", moveAstronaut);
+
+            setInterval(spawnMeteor, 2000); // spawn meteor setiap 2000 ms / 2 detik
+            setInterval(spawnPowerUp, 10000); // spawn power-up setiap 10000 ms / 10 detik
+            setInterval(spawnBlackHole, 10000); // spawn black hole setiap 15 detik
+            setInterval(spawnComet, 5000); // spawn comet setiap 5000 ms / 5 detik
+        };
+
+        function update() {
+            requestAnimationFrame(update);
+            if (gameOver) {
+                return;
+            }
+            context.clearRect(0, 0, boardWidth, boardHeight);
+
+            //spawn background
+            updateStars();
+
+            // update posisi horizontal astronot
+            astronaut.x += velocityX;
+            if (astronaut.x > boardWidth) {
+                astronaut.x = 0;
+            } else if (astronaut.x + astronaut.width < 0) {
+                astronaut.x = boardWidth - astronaut.width;
+            }
+
+            // update posisi vertical posisi astronaut
+            velocityY += gravity;
+            astronaut.y += velocityY;
+            if (astronaut.y > board.height) {
+                gameOver = true;
+            }
+            context.drawImage(astronaut.img, astronaut.x, astronaut.y, astronaut.width, astronaut.height);
+
+            // Update orbital stars
+            if (invincible) {
+                updateOrbitalStars();
+                drawOrbitalStars();
+            }
+
+            // Update platforms
+            for (let i = 0; i < platformArray.length; i++) {
+                let platform = platformArray[i];
+                if (velocityY < 0 && astronaut.y < boardHeight * 3 / 4) {
+                    platform.y -= initialVelocityY; // pindah platform ketika astronot lompat dan turun bawajh
+                }
+                if (Collision(astronaut, platform) && velocityY >= 0) {
+                    velocityY = initialVelocityY; // astronaut jumps
+                }
+                context.drawImage(platform.img, platform.x, platform.y, platform.width, platform.height);
+            }
+
+            // remove platform yang dh lewat dan spawn baru
+            while (platformArray.length > 0 && platformArray[0].y >= boardHeight) {
+                platformArray.shift();
+                newPlatform();
+            }
+
+            // Update meteors
+            for (let i = 0; i < meteorArray.length; i++) {
+                let meteor = meteorArray[i];
+                meteor.y += meteor.velocityY;
+                context.drawImage(meteor.img, meteor.x, meteor.y, meteor.width, meteor.height);
+
+                // check collision astronot dan meteor
+                if (!invincible && Collision(astronaut, meteor)) {
+                    gameOver = true;
+                }
+            }
+
+            // delete meteor yang dh lewat
+            meteorArray = meteorArray.filter(meteor => meteor.y < boardHeight);
+
+            // spawn random buff
+            for (let i = 0; i < powerUpArray.length; i++) {
+                let powerUp = powerUpArray[i];
+                powerUp.y += powerUp.velocityY;
+                context.drawImage(powerUp.img, powerUp.x, powerUp.y, powerUp.width, powerUp.height);
+
+                // check collision buff
+                if (Collision(astronaut, powerUp)) {
+                    powerUpArray.splice(i, 1);
+                    activatePowerUp();
+                }
+            }
+
+            // spawn blackhole
+            for (let i = 0; i < blackHoleArray.length; i++) {
+                let blackHole = blackHoleArray[i];
+                blackHole.y += blackHole.velocityY;
+                context.drawImage(blackHole.img, blackHole.x, blackHole.y, blackHole.width, blackHole.height);
+
+                // check collision blackhole
+                if (Collision(astronaut, blackHole)) {
+                    // game over on collision
+                    gameOver = true;
+                }
+            }
+
+            // remove blackhole yang dh lewat
+            blackHoleArray = blackHoleArray.filter(blackHole => blackHole.y < boardHeight);
+
+            // Update comets
+            for (let i = 0; i < cometArray.length; i++) {
+                let comet = cometArray[i];
+                comet.x += comet.velocityX;
+                context.drawImage(comet.img, comet.x, comet.y, comet.width, comet.height);
+
+                // check collision astronot dan comet
+                if (!invincible && Collision(astronaut, comet)) {
+                    gameOver = true;
+                }
+            }
+
+            // remove comet yang dh lewat
+            cometArray = cometArray.filter(comet => comet.x < boardWidth && comet.x + comet.width > 0);
+
+            // show score
+            updateScore();
+            context.fillStyle = "white";
+            context.font = "16px sans-serif";
+            context.fillText(score, 5, 20);
+
+            if (gameOver) {
+                context.fillText("Game Over : 'SPACE' for Restart", boardWidth / 7, boardHeight * 7 / 8);
+            }
+        }
+
+        function moveAstronaut(e) {
+            if (e.code == "ArrowRight" || e.code == "KeyD") {
+                velocityX = 2;
+                astronaut.img = astronautRightImg;
+            } else if (e.code == "ArrowLeft" || e.code == "KeyA") {
+                velocityX = -2;
+                astronaut.img = astronautLeftImg;
+            } else if (e.code == "Space" && gameOver) {
+                location.reload(); //akan refresh page ketika kita pencet spasi saat gameover
+            }
+        }
+
+        function Collision(a, b) {
+            let paddingX = 10; 
+            let paddingY = 10; 
+
+            // penyusuain hitbox
+            let ax = a.x + paddingX;
+            let ay = a.y + paddingY;
+            let aw = a.width - 2 * paddingX;
+            let ah = a.height - 2 * paddingY;
+
+            // penyusuain hitbox meteor
+            let bx = b.x + paddingX;
+            let by = b.y + paddingY;
+            let bw = b.width - 2 * paddingX;
+            let bh = b.height - 2 * paddingY;
+
+            return ax < bx + bw &&
+                ax + aw > bx &&
+                ay < by + bh &&
+                ay + ah > by;
+        }
+
+        function updateScore() {
+            let points = Math.floor(1 * 1); //(0-1) *50 --> (0-50)
+            if (velocityY < 0) { // negative going up
+                maxScore += points;
+                if (score < maxScore) {
+                    score = maxScore;
+                }
+            } else if (velocityY >= 0) {
+                maxScore -= points;
+            }
+        }
+
+        function createStars() {
+            for (let i = 0; i < 100; i++) {
+                let star = {
+                    x: Math.random() * boardWidth,
+                    y: Math.random() * boardHeight,
+                    size: Math.random() * 2 + 1,
+                    velocityY: Math.random() * 0.5
+                };
+                starArray.push(star);
+            }
+        }
+
+        function updateStars() {
+            context.fillStyle = "black";
+            context.fillRect(0, 0, boardWidth, boardHeight);
+            context.fillStyle = "white";
+            for (let i = 0; i < starArray.length; i++) {
+                let star = starArray[i];
+                star.y += star.velocityY;
+                if (star.y > boardHeight) {
+                    star.y = 0;
+                    star.x = Math.random() * boardWidth;
+                }
+                context.beginPath();
+                context.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                context.fill();
+            }
+        }
+
+        function activatePowerUp() {
+            invincible = true;
+            setTimeout(() => invincible = false, 5000); // kebal selama 5 detik / 5000ms
+            initializeOrbitalStars();
+        }
+
+        function updateOrbitalStars() {
+            for (let star of orbitalStars) {
+                star.angle += star.speed;
+                if (star.angle > 2 * Math.PI) {
+                    star.angle -= 2 * Math.PI;
+                }
+            }
+        }
+
+        function drawOrbitalStars() {
+            for (let star of orbitalStars) {
+                let starX = astronaut.x + astronaut.width / 2 + star.radius * Math.cos(star.angle) - star.size / 2; // orbiting
+                let starY = astronaut.y + astronaut.height / 2 + star.radius * Math.sin(star.angle) - star.size / 2; // orbiting
+                // nampilin bintang
+                context.drawImage(starImage, starX, starY, star.size, star.size);
+            }
+        }
+
+    </script>
+</body>
+</html>
